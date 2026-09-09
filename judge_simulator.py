@@ -30,7 +30,7 @@ LLM_PROVIDER = "openai"
 LLM_API_KEY = ""  # <-- PUT YOUR API KEY HERE
 
 # Model to use (leave empty for default, or specify like "gpt-4o", "claude-3-5-sonnet-20241022", etc.)
-LLM_MODEL = ""  # <-- Optional: specify model or leave empty for default
+LLM_MODEL = "meta/llama-3.2-90b-vision-instruct"  # <-- Optional: specify model or leave empty for default
 
 # For Ollama only: local server URL
 OLLAMA_URL = "http://localhost:11434"
@@ -172,7 +172,7 @@ class OpenAIProvider(LLMProvider):
         }).encode("utf-8")
 
         req = urlrequest.Request(
-            "https://api.openai.com/v1/chat/completions",
+            "https://integrate.api.nvidia.com/v1/chat/completions",
             data=body,
             headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         )

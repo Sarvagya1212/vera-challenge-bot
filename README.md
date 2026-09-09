@@ -1,33 +1,27 @@
 # Vera Challenge Submission
 
 ## Approach
-This submission implements the challenge contract as a dependency-free Python HTTP service. It uses a **context-first, deterministic router** rather than making every message depend on an external LLM. This keeps `/v1/context`, `/v1/tick`, and `/v1/reply` fast and reproducible and makes the no-fabrication constraint auditable.
+This submission implements a hybrid **LLM-Augmented Composition Engine** with a highly capable deterministic fallback. 
 
-The composer consumes the four pushed contexts:
-- Category: voice, digest, peer signals and category-specific knowledge.
-- Merchant: identity, performance, active offers, signals and customer aggregate.
-- Trigger: the immediate "why now" event and suppression key.
-- Customer: only when a customer-scoped trigger is supplied.
+The architecture is designed to handle both the speed/determinism constraints of the challenge and the dynamic requirements of an engaging conversation:
+1. **Primary**: OpenAI-compatible LLM integration (configured for NVIDIA NIM). Uses rich prompt engineering to inject category voice constraints, merchant performance metrics (vs peers), active offers, and explicit conversational history.
+2. **Fallback**: If the LLM is unavailable or times out, a highly-contextualized deterministic router takes over. It uses trigger-specific templates that still inject live metrics, seasonal context, and correct tone (improving upon the original 59-score submission).
+3. **Conversational State**: In-memory state tracking to handle auto-replies gracefully, manage explicit opt-outs, and switch from conversational to action-oriented "intent" modes based on merchant commitments.
 
-Trigger-specific composition routes cover the representative trigger families in the supplied dataset: research/compliance, performance, renewal, festival, reviews, milestones, planning, seasonal demand, GBP, competitors, CDE, IPL, supply/refill, recall/winback and trial/bridal follow-up.
+## Improvements Over Baseline
+- **Context Injection**: Incorporates peer CTR comparisons, exact metric dips, and specific review quotes.
+- **Audience Correctness**: Customer-facing messages correctly handle the `merchant_on_behalf` scope, explicitly formatting messages from the merchant to the customer. Fixed suppression keys and customer name formatting.
+- **Language Nuance**: Prompt instructions vary dynamically to support Hindi-English code-mixing or other requested languages based on the merchant/customer identity.
+- **Specific Rationales**: Each generated message now has a unique, detailed rationale describing exactly what data points from the `Category`, `Merchant`, `Trigger`, and `Customer` contexts were anchored upon.
+- **Safety**: URL stripping and strict token formatting prevent LLM hallucination and ensure WhatsApp compliance.
 
-## Safety and reliability
-- Context versions are monotonic; same/older versions return `409 stale_version`; newer versions replace atomically.
-- Customer messages require WhatsApp-compatible channel/consent scope when a relevant consent scope exists.
-- Customer messages use `merchant_on_behalf`; merchant messages use `vera`.
-- Suppression keys prevent duplicate proactive sends across ticks.
-- URLs are stripped from generated bodies because they add no necessary value for the challenge and can trigger the hard URL penalty.
-- No external data is fetched and no unsupported merchant/customer facts are invented.
-- Reply state detects explicit opt-out, repeated canned auto-replies, and clear intent transitions.
-- Conversation state is in memory because the challenge allows it; production would use durable Redis/DB state.
+## Environment configuration
+To enable the LLM engine for testing, set:
+- `NIM_API_KEY` (or standard `OPENAI_API_KEY` if adapting the base URL)
+- `NIM_MODEL` (default: `meta/llama-3.1-70b-instruct`)
 
-## Tradeoffs
-The main tradeoff is choosing deterministic composition over an LLM in the hot path. This sacrifices some stylistic creativity, but gains predictable latency, lower operational risk, stronger provenance and protection against hallucinated offers/research facts. The architecture leaves the composition boundary isolated so a constrained LLM can be added later for wording while retaining deterministic retrieval, validation and safety gates.
+Without an API key, the service runs purely on its enhanced deterministic fallback mode.
 
-## What additional context would help most
-For a production version, the highest-value additions would be:
-1. Verified appointment/inventory availability at send time.
-2. Merchant-approved offer/catalog source of truth.
-3. Customer consent timestamps and granular outreach scopes.
-4. Conversation-level 24-hour session state and delivery status.
-5. Fresh peer benchmarks by locality/category.
+## Testing
+- `python self_test.py` validates endpoint idempotency and state logic.
+- `python generate_submission.py` re-generates the `submission.jsonl` test set using the deterministic fallback if no LLM is present.
